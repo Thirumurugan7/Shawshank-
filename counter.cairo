@@ -1,33 +1,40 @@
+#[starknet::interface]
+pub trait ICounter<TContractState> {
+    fn get_value(self: @TContractState) -> felt252;
+    fn increment(ref self: TContractState) -> felt252;
+    fn decrement(ref self: TContractState) -> felt252;
+    fn add(ref self: TContractState, amount: felt252) -> felt252;
+}
+
 #[starknet::contract]
 mod Counter {
-    use starknet::ContractAddress;
+    use core::starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 
     #[storage]
     struct Storage {
-        value: felt
+        value: felt252
     }
 
-    @view
-    fn getValue() -> felt {
-        return value;
-    }
+    #[abi(embed_v0)]
+    impl CounterImpl of super::ICounter<ContractState> {
+        fn getValue(ref self: ContractState) -> felt252 {
+            self.value.read()
+        }
 
-    @external
-    fn increment() -> felt {
-        let value = value + 1;
-        return value;
-    }
+        fn increment(ref self: ContractState) -> felt252 {
+            self.value.write(self.value.read() + 1);
+            self.value.read()
+        }
 
-    @external
-    fn decrement() -> felt {
-        let value = value - 1;
-        return value;
-    }
+        fn decrement(ref self: ContractState) -> felt252 {
+            self.value.write(self.value.read() - 1);
+            self.value.read()
+        }
 
-    @external
-    fn add(amount: felt) -> felt {
-        let value = value + amount;
-        return value;
-    }
+        fn add(ref self: ContractState, amount: felt252) -> felt252 {
+            self.value.write(self.value.read() + amount);
+            self.value.read()
+        }
 
+    }
 }

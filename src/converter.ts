@@ -1,120 +1,3 @@
-// import * as ts from 'typescript';
-// import { 
-//     CairoNode, 
-//     CairoProgram, 
-//     CairoFunction, 
-//     CairoType,
-//     CairoParameter,
-//     CairoExpression 
-// } from './types/cairo';
-
-// export class TypeScriptToCairoConverter {
-//     private sourceFile: ts.SourceFile;
-
-//     constructor(sourceCode: string) {
-//         this.sourceFile = ts.createSourceFile(
-//             'temp.ts',
-//             sourceCode,
-//             ts.ScriptTarget.Latest,
-//             true
-//         );
-//     }
-
-//     public convert(): string {
-//         const program = this.createCairoProgram();
-//         return this.generateCode(program);
-//     }
-
-//     private createCairoProgram(): CairoProgram {
-//         return {
-//             type: 'program',
-//             body: this.convertBody(this.sourceFile)
-//         };
-//     }
-
-//     private convertBody(node: ts.Node): CairoNode[] {
-//         const nodes: CairoNode[] = [];
-//         ts.forEachChild(node, child => {
-//             const converted = this.convertNode(child);
-//             if (converted) {
-//                 nodes.push(converted);
-//             }
-//         });
-//         return nodes;
-//     }
-
-//     private convertNode(node: ts.Node): CairoNode | null {
-//         switch (node.kind) {
-//             case ts.SyntaxKind.FunctionDeclaration:
-//                 return this.convertFunction(node as ts.FunctionDeclaration);
-//             default:
-//                 console.warn(`Unsupported node type: ${ts.SyntaxKind[node.kind]}`);
-//                 return null;
-//         }
-//     }
-
-//     private convertFunction(node: ts.FunctionDeclaration): CairoFunction | null {
-//         if (!node.name) {
-//             throw new Error('Anonymous functions are not supported');
-//         }
-
-//         return {
-//             type: 'function',
-//             name: node.name.text,
-//             parameters: this.convertParameters(node.parameters),
-//             returnType: this.convertType(node.type),
-//             body: node.body ? this.convertBody(node.body) : []
-//         };
-//     }
-
-//     private convertParameters(parameters: ts.NodeArray<ts.ParameterDeclaration>): CairoParameter[] {
-//         return parameters.map(param => ({
-//             name: (param.name as ts.Identifier).text,
-//             type: this.convertType(param.type)
-//         }));
-//     }
-
-//     private convertType(typeNode: ts.TypeNode | undefined): CairoType {
-//         if (!typeNode) {
-//             return { name: 'felt' }; // Default type
-//         }
-
-//         switch (typeNode.kind) {
-//             case ts.SyntaxKind.NumberKeyword:
-//                 return { name: 'felt' };
-//             case ts.SyntaxKind.StringKeyword:
-//                 return { name: 'felt*' };
-//             case ts.SyntaxKind.BooleanKeyword:
-//                 return { name: 'bool' };
-//             default:
-//                 return { name: 'felt' };
-//         }
-//     }
-
-//     private generateCode(node: CairoNode): string {
-//         switch (node.type) {
-//             case 'program':
-//                 const program = node as CairoProgram;
-//                 return program.body.map(n => this.generateCode(n)).join('\n\n');
-            
-//             case 'function':
-//                 const func = node as CairoFunction;
-//                 const params = func.parameters
-//                     .map(p => `${p.name}: ${p.type.name}`)
-//                     .join(', ');
-                
-//                 return `func ${func.name}(${params}) -> (${func.returnType.name}) {\n` +
-//                        `    // Function body will be implemented in next step\n` +
-//                        `}`;
-            
-//             default:
-//                 return '';
-//         }
-//     }
-// }
-
-
-
 import * as ts from 'typescript';
 import { CairoContract, CairoFunction, CairoStorage } from './types/cairo';
 
@@ -150,13 +33,11 @@ export class TypeScriptToCairoConverter {
     }
 
     private processClass(node: ts.ClassDeclaration) {
-        // Add storage variable
         this.contract.storage.push({
             name: 'value',
-            type: 'felt'
+            type: 'felt252'  // Updated to felt252
         });
 
-        // Process methods
         node.members.forEach(member => {
             if (ts.isMethodDeclaration(member)) {
                 this.processMember(member);
@@ -170,40 +51,38 @@ export class TypeScriptToCairoConverter {
         const methodName = node.name.getText();
         const parameters = node.parameters.map(param => ({
             name: param.name.getText(),
-            type: 'felt'
+            type: 'felt252'  // Updated to felt252
         }));
 
         let cairoFunction: CairoFunction = {
             name: methodName,
             parameters: parameters,
-            returnType: 'felt',
+            returnType: 'felt252',  // Updated to felt252
             visibility: 'external',
-            decorators: ['@external'],
+            decorators: [],
             body: []
         };
 
         switch (methodName) {
             case 'getValue':
-                cairoFunction.visibility = 'view';
-                cairoFunction.decorators = ['@view'];
-                cairoFunction.body = ['return value;'];
+                cairoFunction.body = ['self.value.read()'];
                 break;
             case 'increment':
                 cairoFunction.body = [
-                    'let value = value + 1;',
-                    'return value;'
+                    'self.value.write(self.value.read() + 1);',
+                    'self.value.read()'
                 ];
                 break;
             case 'decrement':
                 cairoFunction.body = [
-                    'let value = value - 1;',
-                    'return value;'
+                    'self.value.write(self.value.read() - 1);',
+                    'self.value.read()'
                 ];
                 break;
             case 'add':
                 cairoFunction.body = [
-                    'let value = value + amount;',
-                    'return value;'
+                    'self.value.write(self.value.read() + amount);',
+                    'self.value.read()'
                 ];
                 break;
         }
@@ -212,16 +91,27 @@ export class TypeScriptToCairoConverter {
     }
 
     private generateCairoCode(): string {
+        // Generate interface
         let code = [
+            '#[starknet::interface]',
+            `pub trait ICounter<TContractState> {`,
+            '    fn get_value(self: @TContractState) -> felt252;',
+            '    fn increment(ref self: TContractState) -> felt252;',
+            '    fn decrement(ref self: TContractState) -> felt252;',
+            '    fn add(ref self: TContractState, amount: felt252) -> felt252;',
+            '}',
+            '',
             '#[starknet::contract]',
             'mod Counter {',
-            '    use starknet::ContractAddress;',
+            '    use core::starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};',
             '',
             '    #[storage]',
             '    struct Storage {',
             `        ${this.generateStorageVariables()}`,
             '    }',
-            ''
+            '',
+            '    #[abi(embed_v0)]',
+            '    impl CounterImpl of super::ICounter<ContractState> {',
         ];
 
         // Add functions
@@ -229,7 +119,7 @@ export class TypeScriptToCairoConverter {
             code.push(...this.generateFunction(func));
         });
 
-        code.push('}');
+        code.push('    }', '}');
 
         return code.join('\n');
     }
@@ -241,15 +131,18 @@ export class TypeScriptToCairoConverter {
     }
 
     private generateFunction(func: CairoFunction): string[] {
-        const params = func.parameters
-            .map(param => `${param.name}: ${param.type}`)
+        const needsRef = func.name !== 'get_value';
+        const selfParam = needsRef ? 'ref self: ContractState' : 'self: @ContractState';
+        const additionalParams = func.parameters
+            .filter(p => p.name !== 'self')
+            .map(p => `${p.name}: ${p.type}`)
             .join(', ');
+        const allParams = [selfParam, additionalParams].filter(Boolean).join(', ');
 
         return [
-            `    ${func.decorators.join('\n    ')}`,
-            `    fn ${func.name}(${params}) -> ${func.returnType} {`,
-            ...func.body.map(line => `        ${line}`),
-            '    }',
+            `        fn ${func.name}(${allParams}) -> ${func.returnType} {`,
+            ...func.body.map(line => `            ${line}`),
+            '        }',
             ''
         ];
     }
