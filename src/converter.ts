@@ -95,7 +95,7 @@ export class TypeScriptToCairoConverter {
         let code = [
             '#[starknet::interface]',
             `pub trait ICounter<TContractState> {`,
-            '    fn get_value(self: @TContractState) -> felt252;',
+            '    fn getValue(self: @TContractState) -> felt252;',
             '    fn increment(ref self: TContractState) -> felt252;',
             '    fn decrement(ref self: TContractState) -> felt252;',
             '    fn add(ref self: TContractState, amount: felt252) -> felt252;',
@@ -131,7 +131,7 @@ export class TypeScriptToCairoConverter {
     }
 
     private generateFunction(func: CairoFunction): string[] {
-        const needsRef = func.name !== 'get_value';
+        const needsRef = func.name !== 'getValue';
         const selfParam = needsRef ? 'ref self: ContractState' : 'self: @ContractState';
         const additionalParams = func.parameters
             .filter(p => p.name !== 'self')

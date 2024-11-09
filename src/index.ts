@@ -1,14 +1,3 @@
-// import { TypeScriptToCairoConverter } from './converter';
-
-// // Example usage
-// const sourceCode = `
-// function Multiply(a: number, b: number): number {
-//     return a * b;
-// }
-// `;
-
-// const converter = new TypeScriptToCairoConverter(sourceCode);
-// console.log(converter.convert());
 
 
 import { TypeScriptToCairoConverter } from './converter';
